@@ -1,0 +1,32 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Cloud Repository
+      uses: actions/checkout@v4
+
+    - name: Get Buildozer Cache
+      uses: actions/cache@v4
+      with:
+        path: .buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+
+    - name: Build APK with Buildozer Action
+      uses: ArtemSanya/buildozer-action@v1
+      with:
+        workdir: .
+        buildozer_version: stable
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SmartFactory-APK
+        path: bin/*.apk
