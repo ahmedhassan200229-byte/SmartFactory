@@ -16,25 +16,19 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.10'
 
     - name: Install System Dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libffi-dev libssl-dev build-essential ffmpeg openjdk-17-jdk unzip zip ccache
 
-    - name: Install Buildozer and Dependencies
+    - name: Install Compatible Build Tools
       run: |
         pip install --upgrade pip
-        pip install "cython<3.0.0" wheel
-        pip install git+https://github.com/kivy/buildozer.git
+        pip install "setuptools<66.0.0" "cython>=0.29.33,<3.0.0" wheel
+        pip install git+https://github.com/kivy/buildozer.git@master
 
     - name: Build APK with Buildozer
       run: |
         yes | buildozer -v android debug
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: SmartFactory-APK
-        path: bin/*.apk
