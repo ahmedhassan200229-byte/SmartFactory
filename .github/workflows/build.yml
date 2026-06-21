@@ -1,4 +1,39 @@
+name: Build Android APK
 
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Cloud Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libffi-dev libssl-dev build-essential ffmpeg openjdk-17-jdk unzip zip ccache
+
+    - name: Install Buildozer and Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install "cython<3.0.0" wheel
+        pip install git+https://github.com/kivy/buildozer.git
+
+    - name: Build APK with Buildozer
+      run: |
+        yes | buildozer -v android debug
+
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: SmartFactory-APK
