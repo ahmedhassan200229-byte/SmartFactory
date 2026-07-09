@@ -35,40 +35,10 @@ jobs:
         mkdir -p ~/.bubblewrap
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
 
-    - name: Generate TWA Manifest to Skip CLI Prompts
-      run: |
-        echo '{
-          "packageId": "com.smartfactory.app",
-          "host": "ahmedhassan200229-byte.github.io",
-          "name": "Smart Factory",
-          "launcherName": "Smart Factory",
-          "startUrl": "/SmartFactory/",
-          "iconUrl": "https://ahmedhassan200229-byte.github.io/SmartFactory/icon-512.png",
-          "themeColor": "#0a0e12",
-          "navigationColor": "#0a0e12",
-          "navigationColorDark": "#0a0e12",
-          "navigationDividerColor": "#0a0e12",
-          "navigationDividerColorDark": "#0a0e12",
-          "backgroundColor": "#0a0e12",
-          "enableNotifications": false,
-          "display": "standalone",
-          "orientation": "portrait",
-          "shortcuts": [],
-          "features": {},
-          "alphaDependencies": false,
-          "appVersionCode": 1,
-          "appVersion": "1.0.0",
-          "signingKey": {
-            "path": "./android.keystore",
-            "alias": "android"
-          },
-          "fallbackType": "customtabs"
-        }' > twa-manifest.json
-
     - name: Initialize & Build PWA directly
-      # تم إدراج معامل --manifest بجانب --waves لحل المشكلة نهائياً
+      # الحل السحري لتخطي أسئلة الـ Domain والـ Version تلقائياً بالقيم الافتراضية
       run: |
-        bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --waves=twa-manifest.json
+        yes "" | bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --fast
         
     - name: Build APK & Sign
       run: |
