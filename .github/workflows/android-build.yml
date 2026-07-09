@@ -13,15 +13,18 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Java (JDK 11)
-      # التغيير إلى إصدار 11 يحل خطأ الـ Groovy Parser في Gradle تماماً
+    - name: Setup Java (JDK 17)
+      # نعود إلى إصدار 17 لإرضاء الـ Android SDK
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '11'
+        java-version: '17'
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
+      env:
+        # هذا المتغير يمنع الأداة من التوقف أو الاعتراض على إصدار الجافا
+        SKIP_JDK_VERSION_CHECK: "true"
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -77,7 +80,6 @@ jobs:
         bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --waves=twa-manifest.json
 
     - name: Build & Sign Final APK
-      # تجميع البناء مع تمرير كلمة المرور بشكل صريح لتفادي الـ Broken pipe
       run: |
         bubblewrap build --skipSigning=false --keyStorePassword="password" --keyPassword="password"
         
