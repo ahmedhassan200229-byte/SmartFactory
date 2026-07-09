@@ -35,8 +35,12 @@ jobs:
         mkdir -p ~/.bubblewrap
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
 
+    - name: Generate Keystore File
+      # نقوم بتوليد ملف التوقيع مسبقاً بشكل صامت لتفادي سؤال الأداة عنه
+      run: |
+        keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=SmartFactory, OU=ID, O=Org, L=City, S=State, C=US"
+
     - name: Generate Complete TWA Project Configuration
-      # توليد ملف الإعدادات الشامل والجاهز للمشروع لمنع أي أسئلة نهائياً
       run: |
         echo '{
           "packageId": "com.smartfactory.app",
@@ -68,15 +72,10 @@ jobs:
           "webManifestUrl": "https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json"
         }' > twa-manifest.json
 
-    - name: Pre-build TWA Android Project
-      # توليد ملفات الأندرويد مباشرة من التكوين دون أي حوارات تفاعلية
-      run: |
-        bubblewrap build --twaManifest=twa-manifest.json --skipSigning=true || true
-        
     - name: Build & Sign Final APK
-      # بناء وتوقيع حزمة التطبيق النهائية
+      # نمرر الملف متبوعاً بأمر تخطي كل الأسئلة التفاعلية (yes) للمستجدات
       run: |
-        bubblewrap build --skipSigning=false --keyStorePassword="password" --keyPassword="password"
+        yes "yes" | bubblewrap build --twaManifest=twa-manifest.json --skipSigning=false --keyStorePassword="password" --keyPassword="password"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
