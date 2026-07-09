@@ -36,7 +36,6 @@ jobs:
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
 
     - name: Generate TWA Manifest to Skip CLI Prompts
-      # هنا نقوم بكتابة ملف الإعدادات للمشروع يدوياً لتتخطى الأداة كل الأسئلة
       run: |
         echo '{
           "packageId": "com.smartfactory.app",
@@ -67,9 +66,9 @@ jobs:
         }' > twa-manifest.json
 
     - name: Initialize & Build PWA directly
-      # نقوم باستخدام الأمر update بدلاً من init لتطبيق الإعدادات الجاهزة وتوليد المشروع فوراً دون أسئلة
+      # استخدام خيار --waves لقراءة ملف twa-manifest.json بشكل صامت دون أي أسئلة
       run: |
-        bubblewrap update
+        bubblewrap init --waves=twa-manifest.json
         
     - name: Build APK & Sign
       run: |
