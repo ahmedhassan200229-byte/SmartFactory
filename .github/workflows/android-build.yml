@@ -31,14 +31,45 @@ jobs:
       run: npm install -g @bubblewrap/cli
 
     - name: Configure Bubblewrap Paths (Skip Prompts)
-      # هنا نقوم بتوجيه الأداة بدقة للمسارات التي تم إعدادها في السيرفر
       run: |
         mkdir -p ~/.bubblewrap
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
 
-    - name: Initialize Bubblewrap Project
+    - name: Generate TWA Manifest to Skip CLI Prompts
+      # هنا نقوم بكتابة ملف الإعدادات للمشروع يدوياً لتتخطى الأداة كل الأسئلة
       run: |
-        bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --meta-package="com.smartfactory.app" --fast
+        echo '{
+          "packageId": "com.smartfactory.app",
+          "host": "ahmedhassan200229-byte.github.io",
+          "name": "Smart Factory",
+          "launcherName": "Smart Factory",
+          "startUrl": "/SmartFactory/",
+          "iconUrl": "https://ahmedhassan200229-byte.github.io/SmartFactory/icon-512.png",
+          "themeColor": "#0a0e12",
+          "navigationColor": "#0a0e12",
+          "navigationColorDark": "#0a0e12",
+          "navigationDividerColor": "#0a0e12",
+          "navigationDividerColorDark": "#0a0e12",
+          "backgroundColor": "#0a0e12",
+          "enableNotifications": false,
+          "display": "standalone",
+          "orientation": "portrait",
+          "shortcuts": [],
+          "features": {},
+          "alphaDependencies": false,
+          "appVersionCode": 1,
+          "appVersion": "1.0.0",
+          "signingKey": {
+            "path": "./android.keystore",
+            "alias": "android"
+          },
+          "fallbackType": "customtabs"
+        }' > twa-manifest.json
+
+    - name: Initialize & Build PWA directly
+      # نقوم باستخدام الأمر update بدلاً من init لتطبيق الإعدادات الجاهزة وتوليد المشروع فوراً دون أسئلة
+      run: |
+        bubblewrap update
         
     - name: Build APK & Sign
       run: |
