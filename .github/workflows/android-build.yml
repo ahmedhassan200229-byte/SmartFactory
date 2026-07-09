@@ -66,9 +66,9 @@ jobs:
         }' > twa-manifest.json
 
     - name: Initialize & Build PWA directly
-      # استخدام خيار --waves لقراءة ملف twa-manifest.json بشكل صامت دون أي أسئلة
+      # تم إدراج معامل --manifest بجانب --waves لحل المشكلة نهائياً
       run: |
-        bubblewrap init --waves=twa-manifest.json
+        bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --waves=twa-manifest.json
         
     - name: Build APK & Sign
       run: |
