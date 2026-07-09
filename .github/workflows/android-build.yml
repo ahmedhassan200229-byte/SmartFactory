@@ -21,8 +21,13 @@ jobs:
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
 
+    - name: Configure Bubblewrap Paths (Skip Prompts)
+      # هاتف الخطوة يقوم بإنشاء ملف الإعدادات لتخطي الأسئلة التفاعلية
+      run: |
+        mkdir -p ~/.bubblewrap
+        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
+
     - name: Initialize Bubblewrap Project
-      # استبدل الرابط أدناه برابط موقعك الحقيقي على GitHub Pages
       run: |
         bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/" --meta-package="com.smartfactory.app" --fast
         
@@ -37,4 +42,3 @@ jobs:
         path: |
           *.apk
           *.aab
-          
