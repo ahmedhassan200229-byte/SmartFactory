@@ -13,11 +13,12 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Java (JDK 17)
+    - name: Setup Java (JDK 11)
+      # التغيير إلى إصدار 11 يحل خطأ الـ Groovy Parser في Gradle تماماً
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17'
+        java-version: '11'
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -36,7 +37,6 @@ jobs:
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_SDK_ROOT\"}" > ~/.bubblewrap/config.json
 
     - name: Generate Keystore File
-      # نقوم بتوليد ملف التوقيع مسبقاً بشكل صامت لتفادي سؤال الأداة عنه
       run: |
         keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=SmartFactory, OU=ID, O=Org, L=City, S=State, C=US"
 
@@ -72,11 +72,15 @@ jobs:
           "webManifestUrl": "https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json"
         }' > twa-manifest.json
 
-    - name: Build & Sign Final APK
-      # نمرر الملف متبوعاً بأمر تخطي كل الأسئلة التفاعلية (yes) للمستجدات
+    - name: Initialize Project Files
       run: |
-        yes "yes" | bubblewrap build --twaManifest=twa-manifest.json --skipSigning=false --keyStorePassword="password" --keyPassword="password"
+        bubblewrap init --manifest="https://ahmedhassan200229-byte.github.io/SmartFactory/manifest.json" --waves=twa-manifest.json
 
+    - name: Build & Sign Final APK
+      # تجميع البناء مع تمرير كلمة المرور بشكل صريح لتفادي الـ Broken pipe
+      run: |
+        bubblewrap build --skipSigning=false --keyStorePassword="password" --keyPassword="password"
+        
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
