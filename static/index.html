@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مستخرج ومحمل الوسائط الذكي</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --success: #28a745;
+            --dark: #343a40;
+            --light: #f8f9fa;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light);
+            margin: 0;
+            padding: 20px;
+            color: var(--dark);
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: var(--primary); font-size: 24px; margin-bottom: 25px; }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input[type="url"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+        }
+        input[type="url"]:focus { border-color: var(--primary); }
+        button {
+            padding: 12px 24px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .controls {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        @media (min-width: 600px) {
+            .controls { flex-direction: row; justify-content: space-between; align-items: center; }
+        }
+        select {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            outline: none;
+        }
+        .playlist-title { font-weight: bold; font-size: 16px; color: var(--dark); }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .video-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .video-card img { width: 100%; height: 110px; object-fit: cover; background: #eee; }
+        .video-info { padding: 10px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .video-title { font-size: 13px; font-weight: bold; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+        .checkbox-container { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+        .checkbox-container input { cursor: pointer; width: 16px; height: 16px; }
+        .loader { display: none; text-align: center; font-weight: bold; color: var(--primary); margin: 20px 0; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>محمل قوائم التشغيل والريلز الذكي</h1>
+    
+    <div class="input-group">
+        <input type="url" id="mediaUrl" placeholder="ضع رابط قائمة التشغيل أو الريلز هنا..." required>
+        <button id="analyzeBtn" onclick="analyzeLink()">فحص الرابط</button>
+    </div>
+
+    <div id="loader" class="loader">جاري معالجة طلبك بالسيرفر... يرجى الانتظار دون إغلاق الصفحة...</div>
+
+    <div id="controls" class="controls">
+        <div class="playlist-title" id="pTitle">اسم القائمة</div>
+        <div>
+            <label for="qualitySelect">الجودة: </label>
+            <select id="qualitySelect">
+                <option value="1080">1080p</option>
+                <option value="720" selected>720p</option>
+                <option value="480">480p</option>
+                <option value="360">360p</option>
+                <option value="mp3">صوت فقط MP3</option>
+            </select>
+            <button id="downloadBtn" style="background-color: var(--success);" onclick="startDownload()">تحميل كـ ZIP</button>
+        </div>
+    </div>
+
+    <div id="videoGrid" class="video-grid"></div>
+</div>
+
+<script>
+    let currentPlaylistData = null;
+    const API_URL = window.location.origin;
+
+    async function analyzeLink() {
+        const url = document.getElementById('mediaUrl').value;
+        if(!url) return alert('برجاء إدخال الرابط أولاً');
+
+        toggleLoader(true);
+        document.getElementById('videoGrid').innerHTML = '';
+        document.getElementById('controls').style.display = 'none';
+
+        try {
+            const response = await fetch(`${API_URL}/api/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+            
+            const data = await response.json();
+            if (response.ok) {
+                currentPlaylistData = data;
+                displayPlaylist(data);
+            } else {
+                alert('خطأ من السيرفر: ' + (data.detail || 'تعذر جلب البيانات'));
+            }
+        } catch (error) {
+            alert('تعذر الاتصال بالسيرفر، تأكد من تشغيل الـ Backend');
+        } finally {
+            toggleLoader(false);
+        }
+    }
+
+    function displayPlaylist(data) {
+        document.getElementById('pTitle').innerText = `${data.playlist_title} (${data.total_videos || 1} فيديو)`;
+        document.getElementById('controls').style.display = 'flex';
+        
+        const grid = document.getElementById('videoGrid');
+        
+        data.videos.forEach(video => {
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            const thumb = video.thumbnail ? video.thumbnail : 'https://via.placeholder.com/200x120?text=No+Image';
+            
+            card.innerHTML = `
+                <img src="${thumb}" alt="thumbnail" loading="lazy">
+                <div class="video-info">
+                    <div class="video-title">${video.title}</div>
+                    <label class="checkbox-container">
+                        <input type="checkbox" class="video-checkbox" value="${video.url}" checked>
+                        <span>تحديد للتحميل</span>
+                    </label>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    async function startDownload() {
+        const checkboxes = document.querySelectorAll('.video-checkbox:checked');
+        const selectedUrls = Array.from(checkboxes).map(cb => cb.value);
+        
+        if(selectedUrls.length === 0) return alert('الرجاء تحديد عنصر واحد على الأقل للتحميل');
+        
+        toggleLoader(true);
+        const quality = document.getElementById('qualitySelect').value;
+        const zipName = currentPlaylistData ? currentPlaylistData.playlist_title : 'media_package';
+
+        try {
+            const response = await fetch(`${API_URL}/api/download`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    urls: selectedUrls,
+                    quality: quality,
+                    zip_name: zipName
+                })
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `${zipName}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } else {
+                const errData = await response.json();
+                alert('فشل التحميل من السيرفر: ' + (errData.detail || 'خطأ غير معروف'));
+            }
+        } catch (error) {
+            alert('حدث خطأ غير متوقع أثناء معالجة وضغط الملفات');
+        } finally {
+            toggleLoader(false);
+        }
+    }
+
+    function toggleLoader(show) {
+        document.getElementById('loader').style.display = show ? 'block' : 'none';
+        document.getElementById('analyzeBtn').disabled = show;
+        document.getElementById('downloadBtn').disabled = show;
+    }
+</script>
+</body>
+  </html>
+  
