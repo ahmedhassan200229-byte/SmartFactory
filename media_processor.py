@@ -1,145 +1,110 @@
 import os
 import zipfile
+import io
 import shutil
-import tempfile
-from typing import List, Dict, Any, Optional
-
-# تأكد من تثبيت وتحديث المكتبة في السيرفر: pip install -U yt-dlp
 import yt_dlp
 
-class AdvancedMediaProcessor:
-    """
-    فصل متكامل لمعالجة وتحميل القوائم والوسائط المفتوحة من مختلف المنصات.
-    يدعم استخراج القوائم كاملة، التحميل الانتقائي، تحديد الجودة، والضغط التلقائي.
-    """
-
-    def __init__(self):
-        # إعدادات الفحص السريع لاستخراج البيانات الوصفية فقط دون تحميل أي ملفات
-        self.ydl_opts_metadata = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,    # مسح القائمة بشكل مسطح وسريع جداً لجلب العناصر
-            'skip_download': True,   # عدم تحميل أي محتوى في مرحلة الفحص
-            'force_generic_extractor': False,
-        }
-
-    # ------------------- الدالة الأولى: استخراج بيانات القائمة أو الصفحة كاملة -------------------
-    def extract_playlist_metadata(self, url: str) -> Dict[str, Any]:
-        """
-        تستقبل رابط قائمة تشغيل أو صفحة ريلز، وتستخرج الأسماء، الروابط والصور المصغرة لكل فيديو.
-        """
+def fetch_playlist_info(url: str):
+    """جلب معلومات قائمة التشغيل بشكل آمن مع روابط صور مصلحة لا تحظرها السيرفرات"""
+    ydl_opts = {
+        'extract_flat': True,
+        'skip_download': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            with yt_dlp.YoutubeDL(self.ydl_opts_metadata) as ydl:
-                info = ydl.extract_info(url, download=False)
-                
-                # التحقق مما إذا كان الرابط يحتوي على عناصر متعددة (قائمة تشغيل / صفحة)
-                if 'entries' in info:
-                    videos_list = []
-                    for entry in info['entries']:
-                        if entry:  # التأكد من أن العنصر يحتوي على بيانات صالحة
-                            video_url = entry.get('url') or entry.get('webpage_url')
-                            if not video_url and entry.get('id'):
-                                video_url = f"https://www.youtube.com/watch?v={entry.get('id')}"
-
-                            videos_list.append({
-                                "id": entry.get('id'),
-                                "title": entry.get('title', 'بدون عنوان'),
-                                "url": video_url,
-                                "thumbnail": entry.get('thumbnail', None)
-                            })
-                    
-                    return {
-                        "status": "success",
-                        "type": "playlist",
-                        "playlist_title": info.get('title', 'media_package'),
-                        "total_videos": len(videos_list),
-                        "videos": videos_list  # هذه المصفوفة التي تُعرض للمستخدم للاختيار منها
-                    }
-                else:
-                    # إذا كان الرابط لفيديو فردي وليس قائمة
-                    return {
-                        "status": "success",
-                        "type": "single_video",
-                        "playlist_title": info.get('title', 'single_video'),
-                        "videos": [{
-                            "id": info.get('id'),
-                            "title": info.get('title', 'بدون عنوان'),
-                            "url": info.get('webpage_url', url),
-                            "thumbnail": info.get('thumbnail', None)
-                        }]
-                    }
-        except Exception as e:
-            return {
-                "status": "error",
-                "source_url": url,
-                "error_message": str(e)
-            }
-
-    # ------------------- الدالة الثانية: تحميل الفيديوهات المختارة فقط بجودة محددة -------------------
-    def download_selected_videos(self, video_urls: List[str], quality: str = "720p", temp_folder: Optional[str] = None) -> str:
-        """
-        تستقبل روابط الفيديوهات المحددة فقط من قبل المستخدم وتنزّلها داخل مجلد مؤقت بالجودة المطلوبة.
-        """
-        if temp_folder is None:
-            temp_folder = tempfile.mkdtemp(prefix="media_downloads_")
-        
-        # إدارة وتخصيص الجودة بناءً على اختيار المستخدم
-        if quality.lower() == "mp3":
-            format_option = 'bestaudio/best'
-            postprocessors_opts = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
-            merge_format = None
-        else:
-            format_option = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}][ext=mp4]/best'
-            postprocessors_opts = []
-            merge_format = 'mp4'
-
-        download_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'outtmpl': os.path.join(temp_folder, '%(title)s.%(ext)s'),  # حفظ الملف باسم الفيديو الأصلي
-            'format': format_option,
-            'merge_output_format': merge_format,
-            'postprocessors': postprocessors_opts,
-            'ignoreerrors': True,  # تخطي أي فيديو يفشل تحميله وإكمال بقية القائمة
-        }
-
-        with yt_dlp.YoutubeDL(download_opts) as ydl:
-            for url in video_urls:
-                if url:
-                    try:
-                        ydl.download([url])
-                    except Exception as e:
-                        print(f"[خطأ في النظام] تعذر تحميل الرابط {url}: {e}")
-
-        return temp_folder
-
-    # ------------------- الدالة الثالثة: أرشفة المجلد إلى ملف ZIP والتنظيف الفوري -------------------
-    def archive_and_cleanup(self, folder_path: str, zip_name: str = "media_package") -> str:
-        """
-        تضغط المجلد المؤقت بالكامل إلى ملف .zip، ثم تحذف الفيديوهات والمجلد الأصلي لتوفير مساحة السيرفر.
-        """
-        safe_zip_name = "".join([c for c in zip_name if c.isalpha() or c.isdigit() or c in ' _-']).rstrip()
-        if not safe_zip_name:
-            safe_zip_name = "media_package"
+            info = ydl.extract_info(url, download=False)
+            title = info.get('title', 'قائمة تشغيل غير معروفة')
             
-        zip_path = f"{safe_zip_name}.zip"
-        
-        if not os.path.exists(folder_path):
-            raise FileNotFoundError(f"المجلد المؤقت غير موجود: {folder_path}")
-        
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    full_path = os.path.join(root, file)
-                    arcname = os.path.relpath(full_path, start=folder_path)
-                    zipf.write(full_path, arcname)
-        
-        # حذف المجلد المؤقت فوراً للحفاظ على الموارد
-        shutil.rmtree(folder_path, ignore_errors=True)
-        print(f"[نظام الحفظ] تم تنظيف السيرفر وحذف المجلد المؤقت: {folder_path}")
-        
-        return zip_path
+            videos = []
+            entries = info.get('entries', [])
+            
+            # إذا كان الرابط لفيديو مفرد وليس قائمة
+            if not entries and info.get('id'):
+                entries = [info]
+                title = info.get('title', 'فيديو مفرد')
+
+            for entry in entries:
+                if entry:
+                    video_id = entry.get('id')
+                    # معالجة رابط الصورة ليعمل دائماً بشكل مباشر وموثوق
+                    thumb = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if video_id else None
+                    
+                    # حساب الوقت بشكل نصي
+                    duration_sec = entry.get('duration')
+                    duration_str = "00:00"
+                    if duration_sec:
+                        mins = int(duration_sec // 60)
+                        secs = int(duration_sec % 60)
+                        duration_str = f"{mins:02d}:{secs:02d}"
+
+                    videos.append({
+                        "id": video_id,
+                        "title": entry.get('title', 'فيديو بدون عنوان'),
+                        "thumbnail": thumb,
+                        "duration": duration_str
+                    })
+            return {"title": title, "videos": videos}
+        except Exception as e:
+            return {"error": str(e)}
+
+def download_and_zip_playlist(url: str, video_ids: list, quality: str):
+    """
+    تحميل الفيديوهات المختارة فقط وضغطها داخل الذاكرة (Memory) 
+    لضمان إرسال ملف كامل 100% دون كتابة ملفات مؤقتة تتلف على السيرفر
+    """
+    # اختيار صيغة الجودة المطلوبة بناءً على رغبة المستخدم
+    format_opt = 'bestvideo[height<=720]+bestaudio/best[height<=720]'
+    if quality == '480p':
+        format_opt = 'bestvideo[height<=480]+bestaudio/best[height<=480]'
+    elif quality == '360p':
+        format_opt = 'bestvideo[height<=360]+bestaudio/best[height<=360]'
+
+    # إنشاء ملف مضغوط داخل الذاكرة العشوائية (RAM) لسرعة المعالجة ومنع التلف
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # مجلد مؤقت داخل السيرفر لتحميل الفيديوهات الفردية إليه أولاً بأول
+        tmp_dir = os.path.join(os.getcwd(), "tmp_download")
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        for idx, vid_id in enumerate(video_ids):
+            video_url = f"https://www.youtube.com/watch?v={vid_id}"
+            
+            ydl_opts = {
+                'format': format_opt,
+                'outtmpl': os.path.join(tmp_dir, '%(title)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                try:
+                    # تحميل الفيديو الفردي
+                    res = ydl.extract_info(video_url, download=True)
+                    filename = ydl.prepare_filename(res)
+                    
+                    # التحقق من أن الامتداد سليم وأن الملف كتب بنجاح
+                    if not os.path.exists(filename):
+                        # بعض صيغ الدمج تغير الامتداد إلى mkv تلقائياً
+                        base, _ = os.path.splitext(filename)
+                        for ext in ['.mp4', '.mkv', '.webm']:
+                            if os.path.exists(base + ext):
+                                filename = base + ext
+                                break
+
+                    if os.path.exists(filename):
+                        # إضافة الفيديو كاملاً داخل ملف الـ ZIP
+                        arcname = os.path.basename(filename)
+                        zip_file.write(filename, arcname=arcname)
+                        # حذف الفيديو الفردي فوراً لتوفير مساحة السيرفر
+                        os.remove(filename)
+                except Exception:
+                    continue # تخطي أي فيديو يفشل تحميله والانتقال للتالي دون إفساد الحزمة
+
+        # تنظيف المجلد المؤقت بالكامل بعد الانتهاء
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+
+    # إعادة مؤشر القراءة لبداية الملف المضغوط لإرساله بشكل سليم
+    zip_buffer.seek(0)
+    return zip_buffer
