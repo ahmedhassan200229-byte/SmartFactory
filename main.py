@@ -1,81 +1,58 @@
-import os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import os
 
-# استيراد محرك المعالجة المكتوب في الملف السابق
-from media_processor import AdvancedMediaProcessor
+# استدعاء الدوال المطورة من ملف المعالجة
+from media_processor import fetch_playlist_info, download_and_zip_playlist
 
-app = FastAPI(title="Media Downloader API")
+app = FastAPI(title="Smart Media Downloader Server")
 
-# حماية CORS وتسهيل الاتصال من التطبيق أو المتصفح بدون قيود
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-processor = AdvancedMediaProcessor()
-
-# هياكل التحقق من البيانات المرسلة للـ API
-class URLRequest(BaseModel):
-    url: str
+# ربط المجلد الاستاتيكي لخدمة واجهة المستخدم HTML
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class DownloadRequest(BaseModel):
-    urls: List[str]
+    url: str
     quality: str
-    zip_name: str
+    video_ids: list
+    playlist_title: str
 
-@app.post("/api/analyze")
-def analyze_url(request: URLRequest):
-    """المسار الأول: لفحص الرابط واستخراج عناصر القائمة"""
-    if not request.url:
-        raise HTTPException(status_code=400, detail="الرجاء إدخال رابط صحيح")
+@app.get("/")
+def read_root():
+    # فتح الواجهة بشكل تلقائي فور فتح السيرفر
+    return FileResponse(os.path.join("static", "index.html"))
+
+@app.get("/api/analyze")
+def analyze_url(url: str = Query(..., description="رابط قائمة التشغيل المراد فحصها")):
+    if not url:
+        raise HTTPException(status_code=400, detail="الرجاء تزويد الرابط بشكل صحيح")
     
-    result = processor.extract_playlist_metadata(request.url)
-    if result["status"] == "error":
-        raise HTTPException(status_code=400, detail=result["error_message"])
+    result = fetch_playlist_info(url)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
     return result
 
-@app.post("/api/download")
-def download_media(request: DownloadRequest):
-    """المسار الثاني: لتحميل المحتوى المختار وضغطه تم إرساله كـ ZIP"""
-    if not request.urls:
-        raise HTTPException(status_code=400, detail="لم يتم اختيار أي فيديو للتحميل")
+@app.post("/api/download-zip")
+async def download_zip_endpoint(req: DownloadRequest):
+    if not req.video_ids:
+        raise HTTPException(status_code=400, detail="لم يتم تحديد أي فيديوهات لتحميلها")
     
     try:
-        # 1. تنزيل الفيديوهات المحددة
-        temp_dir = processor.download_selected_videos(
-            video_urls=request.urls, 
-            quality=request.quality
-        )
+        # توليد حزمة الـ ZIP المكتملة داخل الذاكرة
+        zip_io = download_and_zip_playlist(req.url, req.video_ids, req.quality)
         
-        # 2. إنشاء الأرشيف المضغوط وتنظيف السيرفر
-        zip_file_path = processor.archive_and_cleanup(
-            folder_path=temp_dir, 
-            zip_name=request.zip_name
-        )
+        # صياغة اسم الملف النهائي بشكل آمن
+        safe_title = "".join([c for c in req.playlist_title if c.isalpha() or c.isdigit() or c in ' ']).rstrip()
+        filename = f"{safe_title or 'playlist'}.zip"
         
-        # 3. إرجاع الملف فوراً للتحميل
-        if os.path.exists(zip_file_path):
-            return FileResponse(
-                path=zip_file_path, 
-                filename=zip_file_path, 
-                media_type="application/zip"
-            )
-        else:
-            raise HTTPException(status_code=500, detail="فشل إنشاء ملف الأرشيف")
-            
+        # إرسال الملف دفعة واحدة بشكل متدفق للمتصفح لحل مشكلة الملفات التالفة
+        return StreamingResponse(
+            zip_io,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# تشغيل واجهة الـ HTML التلقائية عند الدخول للموقع الرئيسي
-# ملحوظة: تأكد من إنشاء مجلد باسم static وتضع به ملف index.html
-if os.path.exists("static"):
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
+        raise HTTPException(status_code=500, detail=f"حدث خطأ أثناء الضغط: {str(e)}")
